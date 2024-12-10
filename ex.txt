@@ -1,0 +1,774 @@
+{
+  "name": "thick",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~4.0.0",
+    "@react-navigation/native-stack": "^7.1.14",
+    "@reduxjs/toolkit": "^2.4.0",
+    "axios": "^1.7.8",
+    "expo": "~52.0.11",
+    "expo-status-bar": "~2.0.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native": "0.76.3",
+    "react-native-gesture-handler": "~2.20.2",
+    "react-native-get-random-values": "~1.11.0",
+    "react-native-reanimated": "~3.16.1",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.1.0",
+    "react-native-vector-icons": "^10.2.0",
+    "react-native-web": "~0.19.13",
+    "react-redux": "^9.1.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0"
+  },
+  "private": true
+}
+
+
+--------app--------
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Provider } from "react-redux";
+import store from "./redux/store";
+import Login from "./screens/Login";
+import Register from "./screens/Register";
+import TodoApp from "./screens/TodoApp";
+import EditTodo from "./screens/EditTodo.js";
+
+const Stack = createNativeStackNavigator();
+
+export default function App() {
+  return (
+    <Provider store={store}>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName="Login">
+          <Stack.Screen
+            name="Login"
+            component={Login}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen name="Register" component={Register} />
+          <Stack.Screen
+            name="TodoApp"
+            component={TodoApp}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen name="EditTodo" component={EditTodo} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </Provider>
+  );
+}
+
+-----redux----------
+import { createSlice } from "@reduxjs/toolkit";
+
+const todoSlice = createSlice({
+  name: "todos",
+  initialState: {
+    todos: [],
+    user: null,
+  },
+  reducers: {
+    fetchTodos: (state, action) => {
+      state.todos = action.payload;
+    },
+    addTodo: (state, action) => {
+      state.todos.push(action.payload);
+    },
+    // editTodo: (state, action) => {
+    //   const { id, task } = action.payload;
+    //   const todo = state.todos.find((todo) => todo.id === id);
+    //   if (todo) todo.task = task;
+    // },
+    editTodo: (state, action) => {
+      console.log("Payload received:", action.payload); // Kiểm tra payload
+      const { id, task } = action.payload;
+      const todo = state.todos.find((todo) => todo.id === id);
+      if (todo) {
+        todo.task = task;
+      } else {
+        console.error(`Todo with id ${id} not found`);
+      }
+    },
+    deleteTodo: (state, action) => {
+      state.todos = state.todos.filter((todo) => todo.id !== action.payload);
+    },
+    loginSuccess: (state, action) => {
+      state.user = action.payload;
+    },
+    logout: (state) => {
+      state.user = null;
+    },
+  },
+});
+
+export const {
+  fetchTodos,
+  addTodo,
+  editTodo,
+  deleteTodo,
+  loginSuccess,
+  logout,
+} = todoSlice.actions;
+
+export default todoSlice.reducer;
+
+-------------store------------
+import { createStore } from "redux";
+import todoReducer from "./reducer";
+
+const store = createStore(todoReducer);
+
+export default store;
+-----------mafn hinh--add---------
+import React, { useState } from "react";
+import {
+  View,
+  TextInput,
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+} from "react-native";
+import { useDispatch } from "react-redux";
+import { addTodo } from "../redux/reducer";
+import axios from "axios";
+
+const AddTodo = () => {
+  const [task, setTask] = useState("");
+  const dispatch = useDispatch();
+
+  const handleAddTodo = async () => {
+    if (!task.trim()) return;
+
+    const response = await axios.post(
+      "https://674d11d854e1fca9290e4189.mockapi.io/todos",
+      {
+        task,
+        completed: false,
+      }
+    );
+
+    dispatch(addTodo(response.data));
+    setTask("");
+  };
+
+  return (
+    <View style={styles.container}>
+      <TextInput
+        style={styles.input}
+        placeholder="Add a new task..."
+        value={task}
+        onChangeText={setTask}
+      />
+      <TouchableOpacity style={styles.addButton} onPress={handleAddTodo}>
+        <Text style={styles.addButtonText}>Add</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 20,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 10,
+    fontSize: 16,
+    backgroundColor: "#fff",
+  },
+  addButton: {
+    backgroundColor: "#4caf50",
+    padding: 10,
+    borderRadius: 5,
+    alignItems: "center",
+  },
+  addButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+});
+
+export default AddTodo;
+
+-----------------------Edit--
+import React, { useState } from "react";
+import {
+  View,
+  TextInput,
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+} from "react-native";
+import { useDispatch } from "react-redux";
+import { editTodo } from "../redux/reducer";
+import axios from "axios";
+
+const EditTodo = ({ route, navigation }) => {
+  const { id, currentTask } = route.params;
+  const [task, setTask] = useState(currentTask);
+  const dispatch = useDispatch();
+
+  const handleSave = async () => {
+    try {
+      const response = await axios.put(
+        `https://674d11d854e1fca9290e4189.mockapi.io/todos/${id}`,
+        { task }
+      );
+      // dispatch(editTodo(id, response.data.task));
+      dispatch(editTodo({ id, task: response.data.task }));
+      navigation.goBack();
+    } catch (error) {
+      console.error("Error saving todo:", error);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.label}>Edit Task</Text>
+      <TextInput
+        style={styles.input}
+        value={task}
+        onChangeText={setTask}
+        placeholder="Enter updated task"
+      />
+      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+        <Text style={styles.saveButtonText}>Save</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: "#f9f9f9",
+  },
+  label: {
+    fontSize: 18,
+    marginBottom: 10,
+    color: "#333",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 20,
+    fontSize: 16,
+    backgroundColor: "#fff",
+  },
+  saveButton: {
+    backgroundColor: "#4caf50",
+    padding: 15,
+    borderRadius: 5,
+    alignItems: "center",
+  },
+  saveButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+});
+
+export default EditTodo;
+
+-------login---------
+import React, { useState } from "react";
+import {
+  View,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Text,
+} from "react-native";
+import { useDispatch } from "react-redux";
+import { loginSuccess } from "../redux/reducer";
+import axios from "axios";
+
+const Login = ({ navigation }) => {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const dispatch = useDispatch();
+
+  const handleLogin = async () => {
+    try {
+      const response = await axios.get(
+        "https://674d11d854e1fca9290e4189.mockapi.io/users",
+        {
+          params: { username, password },
+        }
+      );
+      const user = response.data[0];
+
+      if (user) {
+        dispatch(loginSuccess(user));
+        navigation.replace("TodoApp");
+      } else {
+        alert("Invalid username or password.");
+      }
+    } catch (error) {
+      console.error("Login failed:", error);
+      alert("Failed to login.");
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Welcome Back!</Text>
+      <Text style={styles.subtitle}>Log in to your account</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Username"
+        value={username}
+        onChangeText={setUsername}
+        placeholderTextColor="#999"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Password"
+        value={password}
+        secureTextEntry
+        onChangeText={setPassword}
+        placeholderTextColor="#999"
+      />
+      <TouchableOpacity style={styles.button} onPress={handleLogin}>
+        <Text style={styles.buttonText}>Login</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => navigation.navigate("Register")}
+        style={styles.registerLink}
+      >
+        <Text style={styles.registerText}>
+          Don't have an account?{" "}
+          <Text style={styles.registerHighlight}>Register</Text>
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "#f9f9f9",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#333",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  input: {
+    height: 50,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    backgroundColor: "#fff",
+    marginBottom: 15,
+    fontSize: 16,
+  },
+  button: {
+    height: 50,
+    backgroundColor: "#4caf50",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  registerLink: {
+    marginTop: 20,
+    alignItems: "center",
+  },
+  registerText: {
+    fontSize: 14,
+    color: "#666",
+  },
+  registerHighlight: {
+    color: "#4caf50",
+    fontWeight: "bold",
+  },
+});
+
+export default Login;
+-----------register-----
+import React, { useState } from "react";
+import {
+  View,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Text,
+} from "react-native";
+import axios from "axios";
+
+const Register = ({ navigation }) => {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleRegister = async () => {
+    if (!username || !password) {
+      alert("Username and password are required!");
+      return;
+    }
+
+    try {
+      await axios.post("https://674d11d854e1fca9290e4189.mockapi.io/users", {
+        username,
+        password,
+      });
+      alert("Registration successful!");
+      navigation.navigate("Login"); // Điều hướng quay lại màn hình Login
+    } catch (error) {
+      console.error("Registration failed:", error);
+      alert("Failed to register.");
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Create Your Account</Text>
+      <Text style={styles.subtitle}>Sign up to get started!</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Username"
+        value={username}
+        onChangeText={setUsername}
+        placeholderTextColor="#999"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Password"
+        value={password}
+        secureTextEntry
+        onChangeText={setPassword}
+        placeholderTextColor="#999"
+      />
+      <TouchableOpacity style={styles.button} onPress={handleRegister}>
+        <Text style={styles.buttonText}>Register</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => navigation.navigate("Login")}
+        style={styles.loginLink}
+      >
+        <Text style={styles.loginText}>
+          Already have an account?{" "}
+          <Text style={styles.loginHighlight}>Log in</Text>
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "#f9f9f9",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#333",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  input: {
+    height: 50,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    backgroundColor: "#fff",
+    marginBottom: 15,
+    fontSize: 16,
+  },
+  button: {
+    height: 50,
+    backgroundColor: "#4caf50",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  loginLink: {
+    marginTop: 20,
+    alignItems: "center",
+  },
+  loginText: {
+    fontSize: 14,
+    color: "#666",
+  },
+  loginHighlight: {
+    color: "#4caf50",
+    fontWeight: "bold",
+  },
+});
+
+export default Register;
+------------todoapp (chính)-------
+import React from "react";
+import { StyleSheet, View, Text, TouchableOpacity } from "react-native";
+import { useSelector, useDispatch } from "react-redux";
+import { logout } from "../redux/reducer";
+import AddTodo from "./AddTodo";
+import TodoList from "./TodoList";
+
+const TodoApp = ({ navigation }) => {
+  const user = useSelector((state) => state.user);
+  const dispatch = useDispatch();
+
+  const handleLogout = () => {
+    dispatch(logout());
+    navigation.replace("Login"); // Điều hướng quay lại màn hình Login
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.welcomeText}>Welcome, {user?.username}!</Text>
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Text style={styles.logoutButtonText}>Logout</Text>
+      </TouchableOpacity>
+      <AddTodo />
+      <TodoList />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: "#f9f9f9",
+  },
+  welcomeText: {
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 20,
+    color: "#333",
+  },
+  logoutButton: {
+    alignSelf: "center",
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#4caf50",
+    borderRadius: 5,
+    marginBottom: 20,
+  },
+  logoutButtonText: {
+    color: "#4caf50",
+    fontSize: 16,
+  },
+});
+
+export default TodoApp;
+------todo list-----
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigation } from "@react-navigation/native";
+import { fetchTodos, deleteTodo } from "../redux/reducer";
+import axios from "axios";
+
+const TodoList = () => {
+  const [loading, setLoading] = useState(true);
+  const todos = useSelector((state) => state.todos);
+  const dispatch = useDispatch();
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await axios.get(
+          "https://674d11d854e1fca9290e4189.mockapi.io/todos"
+        );
+        dispatch(fetchTodos(response.data));
+      } catch (error) {
+        console.error("Error fetching todos:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [dispatch]);
+
+  const handleDelete = async (id) => {
+    try {
+      await axios.delete(
+        `https://674d11d854e1fca9290e4189.mockapi.io/todos/${id}`
+      );
+      dispatch(deleteTodo(id));
+    } catch (error) {
+      console.error("Error deleting todo:", error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4caf50" />
+        <Text style={styles.loadingText}>Loading Todos...</Text>
+      </View>
+    );
+  }
+
+  if (todos.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No tasks available. Add a new one!</Text>
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      data={todos}
+      keyExtractor={(item) => item?.id?.toString()}
+      contentContainerStyle={styles.listContainer}
+      renderItem={({ item }) => (
+        <View style={styles.todoItem}>
+          <Text style={styles.todoText}>{item.task}</Text>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() =>
+                navigation.navigate("EditTodo", {
+                  id: item.id,
+                  currentTask: item.task,
+                })
+              }
+            >
+              <Text style={styles.buttonText}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleDelete(item.id)}
+            >
+              <Text style={styles.buttonText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    />
+  );
+};
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f9f9f9",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: "#666",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f9f9f9",
+  },
+  emptyText: {
+    fontSize: 18,
+    color: "#999",
+  },
+  listContainer: {
+    padding: 10,
+  },
+  todoItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 15,
+    marginBottom: 10,
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  todoText: {
+    fontSize: 16,
+    color: "#333",
+    flex: 1,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  editButton: {
+    backgroundColor: "#4caf50",
+    padding: 8,
+    borderRadius: 5,
+    marginRight: 5,
+  },
+  deleteButton: {
+    backgroundColor: "#f44336",
+    padding: 8,
+    borderRadius: 5,
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 14,
+  },
+});
+
+export default TodoList;
+
